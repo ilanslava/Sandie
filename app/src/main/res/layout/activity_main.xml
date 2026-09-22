@@ -3,52 +3,76 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="24dp"
-    android:gravity="center"
+    android:padding="20dp"
     android:background="#0B0B0D">
 
     <TextView
         android:id="@+id/title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="SANDIE"
-        android:textSize="34sp"
+        android:text="LUNA"
+        android:textSize="32sp"
         android:textStyle="bold"
         android:textColor="#FFFFFF" />
 
     <TextView
         android:id="@+id/status"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:text="Ready"
-        android:textSize="16sp"
+        android:layout_marginTop="8dp"
+        android:text="Your music, in one place"
+        android:textSize="15sp"
         android:textColor="#AAAAAF" />
 
-    <EditText
-        android:id="@+id/wakePhrase"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        android:hint="Wake phrase (e.g. Hey Sandie)"
-        android:textColor="#FFFFFF"
-        android:textColorHint="#77777F"
-        android:singleLine="true"
-        android:inputType="textCapSentences"
-        android:backgroundTint="#777777" />
+        android:layout_marginTop="18dp"
+        android:orientation="horizontal">
 
-    <Button
-        android:id="@+id/listenButton"
+        <Button
+            android:id="@+id/scanButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Scan music" />
+
+        <Button
+            android:id="@+id/reverbButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="Reverb: OFF" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="12dp">
+
+        <LinearLayout
+            android:id="@+id/songList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/nowPlaying"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:text="Activate voice" />
+        android:paddingTop="12dp"
+        android:text="Nothing playing"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp" />
 
     <Button
         android:id="@+id/stopButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:text="Stop listening" />
+        android:layout_marginTop="8dp"
+        android:text="Stop" />
 
 </LinearLayout>
