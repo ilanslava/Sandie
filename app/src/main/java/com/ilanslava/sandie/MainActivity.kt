@@ -41,21 +41,40 @@ class MainActivity : ComponentActivity() {
         else Manifest.permission.READ_EXTERNAL_STORAGE
         if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(permission), 100)
-        } else scanMusic()
+        } else {
+            scanMusic()
+        }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, results: IntArray) {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        results: IntArray
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, results)
-        if (requestCode == 100 && results.firstOrNull() == PackageManager.PERMISSION_GRANTED) scanMusic()
-        else status.text = "Music access is needed to scan your files"
+        if (requestCode == 100 && results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            scanMusic()
+        } else {
+            status.text = "Music access is needed to scan your files"
+        }
     }
 
     private fun scanMusic() {
         songList.removeAllViews()
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST)
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST
+        )
         var count = 0
-        contentResolver.query(collection, projection, "${MediaStore.Audio.Media.IS_MUSIC} != 0", null, "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC")?.use { cursor ->
+        contentResolver.query(
+            collection,
+            projection,
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0",
+            null,
+            "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+        )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
             val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
@@ -66,7 +85,9 @@ class MainActivity : ComponentActivity() {
                 val button = Button(this).apply {
                     text = "$title\n$artist"
                     isAllCaps = false
-                    setOnClickListener { play(Uri.withAppendedPath(collection, id.toString()), title) }
+                    setOnClickListener {
+                        play(Uri.withAppendedPath(collection, id.toString()), title)
+                    }
                 }
                 songList.addView(button)
                 count++
@@ -87,7 +108,8 @@ class MainActivity : ComponentActivity() {
 
     private fun toggleReverb() {
         reverbEnabled = !reverbEnabled
-        findViewById<Button>(R.id.reverbButton).text = if (reverbEnabled) "Reverb: ON" else "Reverb: OFF"
+        findViewById<Button>(R.id.reverbButton).text =
+            if (reverbEnabled) "Reverb: ON" else "Reverb: OFF"
         applyReverb()
     }
 
