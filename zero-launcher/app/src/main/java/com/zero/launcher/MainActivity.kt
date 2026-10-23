@@ -9,6 +9,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.os.Handler
 import android.os.Looper
 import android.text.Editable
@@ -40,6 +42,7 @@ class MainActivity : Activity() {
     private lateinit var clock: TextView
     private lateinit var dateLabel: TextView
     private lateinit var countLabel: TextView
+    private lateinit var batteryLabel: TextView
     private lateinit var emptyLabel: TextView
     private var apps: List<ResolveInfo> = emptyList()
     private var query = ""
@@ -50,6 +53,7 @@ class MainActivity : Activity() {
                 val now = Date()
                 clock.text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(now)
                 dateLabel.text = SimpleDateFormat("EEEE · d MMMM", Locale.getDefault()).format(now).uppercase(Locale.getDefault())
+                updateBatteryLabel()
             }
             handler.postDelayed(this, 30_000L)
         }
@@ -96,10 +100,18 @@ class MainActivity : Activity() {
         brand.addView(label("ZERO", 16, white, true))
         brand.addView(label("YOUR SPACE. YOUR RULES.", 9, muted, true).apply { setPadding(0, dp(3), 0, 0); letterSpacing = .08f })
         bar.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
+        batteryLabel = label("BAT --%", 10, lime, true).apply {
+            gravity = Gravity.CENTER
+            background = rounded(surface, 14)
+            setPadding(dp(10), 0, dp(10), 0)
+        }
+        bar.addView(batteryLabel, LinearLayout.LayoutParams(-2, dp(42)).apply { rightMargin = dp(8) })
         val settings = button("⚙", 20)
+        settings.contentDescription = "ZERO settings"
         settings.setOnClickListener { showSettings() }
         bar.addView(settings, LinearLayout.LayoutParams(dp(44), dp(44)))
         page.addView(bar)
+        updateBatteryLabel()
 
         val hero = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(35), 0, dp(23)) }
         clock = label("--:--", 64, white, false).apply {
@@ -238,6 +250,15 @@ class MainActivity : Activity() {
                 maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(0, dp(8), 0, 0)
             })
         }
+    }
+
+    private fun updateBatteryLabel() {
+        if (!::batteryLabel.isInitialized) return
+        val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = battery?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val percent = if (level >= 0 && scale > 0) (level * 100 / scale) else -1
+        batteryLabel.text = if (percent >= 0) "BAT $percent%" else "BAT --%"
     }
 
     private fun showSettings() {
