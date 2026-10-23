@@ -1,132 +1,265 @@
 package com.ilanslava.sandie
 
-import android.Manifest
+import android.app.Activity
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.provider.MediaStore
-import android.widget.Button
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
+import android.content.Context
+import android.widget.EditText
+import android.widget.GridLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
-import androidx.activity.ComponentActivity
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-class MainActivity : ComponentActivity() {
-    private lateinit var status: TextView
-    private lateinit var songList: LinearLayout
-    private lateinit var nowPlaying: TextView
-
-    private val permissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-            if (result.values.any { it }) scanMusic()
-            else status.text = "Music access is needed to scan your files"
+class MainActivity : Activity() {
+    private var lightMode = false
+    private var query = ""
+    private lateinit var root: LinearLayout
+    private lateinit var appGrid: GridLayout
+    private lateinit var resultLabel: TextView
+    private lateinit var search: EditText
+    private lateinit var clock: TextView
+    private val handler = Handler(Looper.getMainLooper())
+    private val apps = mutableListOf<ApplicationInfo>()
+    private val clockTick = object : Runnable {
+        override fun run() {
+            if (::clock.isInitialized) {
+                clock.text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+            }
+            handler.postDelayed(this, 30_000)
         }
+    }
+
+    private val bg get() = if (lightMode) Color.rgb(242, 245, 250) else Color.rgb(9, 13, 24)
+    private val panel get() = if (lightMode) Color.WHITE else Color.rgb(20, 27, 44)
+    private val fg get() = if (lightMode) Color.rgb(20, 28, 45) else Color.rgb(244, 247, 255)
+    private val muted get() = if (lightMode) Color.rgb(100, 112, 132) else Color.rgb(147, 160, 185)
+    private val accent = Color.rgb(93, 225, 210)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        status = findViewById(R.id.status)
-        songList = findViewById(R.id.songList)
-        nowPlaying = findViewById(R.id.nowPlaying)
-
-        findViewById<Button>(R.id.scanButton).setOnClickListener { requestOrScan() }
-        findViewById<Button>(R.id.reverbButton).setOnClickListener {
-            startPlaybackService(PlaybackService.ACTION_TOGGLE_REVERB)
-        }
-        findViewById<Button>(R.id.stopButton).setOnClickListener {
-            startPlaybackService(PlaybackService.ACTION_STOP)
-            nowPlaying.text = "Stopped"
-        }
-
-        requestOrScan()
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        loadApps()
+        buildHome()
+        handler.post(clockTick)
     }
 
-    private fun requestOrScan() {
-        val permissions = buildList {
-            add(
-                if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
-                else Manifest.permission.READ_EXTERNAL_STORAGE
-            )
-            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-        }.toTypedArray()
-
-        val missing = permissions.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-
-        if (missing.isEmpty()) scanMusic() else permissionLauncher.launch(missing.toTypedArray())
+    override fun onDestroy() {
+        handler.removeCallbacks(clockTick)
+        super.onDestroy()
     }
 
-    private fun scanMusic() {
-        status.text = "Scanning music..."
-        songList.removeAllViews()
+    override fun onResume() {
+        super.onResume()
+        if (::appGrid.isInitialized) renderApps()
+    }
 
-        lifecycleScope.launch {
-            val songs = withContext(Dispatchers.IO) {
-                val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                val projection = arrayOf(
-                    MediaStore.Audio.Media._ID,
-                    MediaStore.Audio.Media.TITLE,
-                    MediaStore.Audio.Media.ARTIST
-                )
-                val result = mutableListOf<Triple<Uri, String, String>>()
+    private fun loadApps() {
+        val pm = packageManager
+        apps.clear()
+        apps.addAll(pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
+            .sortedBy { pm.getApplicationLabel(it).toString().lowercase(Locale.getDefault()) })
+    }
 
-                contentResolver.query(
-                    collection,
-                    projection,
-                    "${MediaStore.Audio.Media.IS_MUSIC} != 0",
-                    null,
-                    "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
-                )?.use { cursor ->
-                    val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                    val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-                    val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+    private fun buildHome() {
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(22), dp(22), dp(8))
+            setBackgroundColor(bg)
+        }
 
-                    while (cursor.moveToNext()) {
-                        val id = cursor.getLong(idColumn)
-                        val title = cursor.getString(titleColumn) ?: "Unknown track"
-                        val artist = cursor.getString(artistColumn) ?: "Unknown artist"
-                        result += Triple(Uri.withAppendedPath(collection, id.toString()), title, artist)
-                    }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val brand = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
+        brand.addView(label("ZERO / PERSONAL OS", 12, accent, true))
+        clock = label("00:00", 52, fg, true)
+        clock.setPadding(0, dp(3), 0, 0)
+        brand.addView(clock)
+        brand.addView(label(SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date()), 14, muted, false))
+        top.addView(brand)
+        val themeButton = label("◐", 26, fg, true).apply {
+            gravity = Gravity.CENTER
+            background = shape(panel, 22)
+            layoutParams = LinearLayout.LayoutParams(dp(54), dp(54))
+            setOnClickListener { lightMode = !lightMode; buildHome() }
+        }
+        top.addView(themeButton)
+        root.addView(top)
+
+        val searchWrap = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = shape(panel, 18)
+            setPadding(dp(15), 0, dp(15), 0)
+            layoutParams = LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(22) }
+        }
+        searchWrap.addView(label("⌕", 25, accent, true))
+        search = EditText(this).apply {
+            hint = "Search apps"
+            setHintTextColor(muted)
+            setTextColor(fg)
+            textSize = 15f
+            singleLine = true
+            background = null
+            setPadding(dp(10), 0, 0, 0)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            addTextChangedListener(SimpleWatcher { value -> query = value; renderApps() })
+        }
+        searchWrap.addView(search, LinearLayout.LayoutParams(0, -1, 1f))
+        root.addView(searchWrap)
+
+        val quickHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(23); bottomMargin = dp(10) }
+        }
+        quickHeader.addView(label("QUICK ACCESS", 11, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        quickHeader.addView(label("Tap an icon to open", 11, muted, false))
+        root.addView(quickHeader)
+
+        val quick = GridLayout(this).apply {
+            columnCount = 4
+            rowCount = 1
+            alignmentMode = GridLayout.ALIGN_BOUNDS
+        }
+        val quickApps = preferredApps().take(4)
+        quickApps.forEach { quick.addView(appTile(it, true), GridLayout.LayoutParams().apply {
+            width = 0; height = dp(86); columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+            setMargins(dp(3), 0, dp(3), 0)
+        }) }
+        root.addView(quick, LinearLayout.LayoutParams(-1, dp(90)))
+
+        val appHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(20); bottomMargin = dp(10) }
+        }
+        appHeader.addView(label("YOUR APPS", 11, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        resultLabel = label("${apps.size} apps", 11, accent, true)
+        appHeader.addView(resultLabel)
+        root.addView(appHeader)
+
+        val scroll = ScrollView(this).apply { isFillViewport = false; clipToPadding = false }
+        appGrid = GridLayout(this).apply { columnCount = 4; alignmentMode = GridLayout.ALIGN_BOUNDS }
+        scroll.addView(appGrid)
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        val footer = label("◆   YOUR SPACE. YOUR RULES.", 10, muted, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(12), 0, dp(5))
+        }
+        root.addView(footer)
+        setContentView(root)
+        renderApps()
+    }
+
+    private fun preferredApps(): List<ApplicationInfo> {
+        val pm = packageManager
+        val preferred = listOf("com.android.settings", "com.google.android.apps.chrome", "com.android.chrome",
+            "com.google.android.youtube", "com.whatsapp", "com.google.android.dialer", "com.android.camera2")
+        val ordered = preferred.mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }
+        return (ordered + apps.filterNot { it in ordered }).distinctBy { it.packageName }
+    }
+
+    private fun renderApps() {
+        if (!::appGrid.isInitialized) return
+        appGrid.removeAllViews()
+        val pm = packageManager
+        val shown = preferredApps().filter {
+            query.isBlank() || pm.getApplicationLabel(it).toString().contains(query, true)
+        }
+        resultLabel.text = "${shown.size} apps"
+        shown.forEach { info ->
+            appGrid.addView(appTile(info, false), GridLayout.LayoutParams().apply {
+                width = 0; height = dp(105)
+                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                setMargins(dp(2), dp(3), dp(2), dp(5))
+            })
+        }
+        if (shown.isEmpty()) {
+            val empty = label("No apps found", 14, muted, false)
+            appGrid.addView(empty)
+        }
+    }
+
+    private fun appTile(info: ApplicationInfo, quick: Boolean): View {
+        val pm = packageManager
+        val tile = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = if (quick) shape(panel, 18) else shape(Color.TRANSPARENT, 16)
+            setPadding(dp(4), dp(7), dp(4), dp(5))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                val launch = pm.getLaunchIntentForPackage(info.packageName)
+                if (launch != null) {
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    try { startActivity(launch) } catch (_: Exception) { }
                 }
-                result
             }
-
-            songList.removeAllViews()
-            songs.forEach { (uri, title, artist) ->
-                val button = Button(this@MainActivity).apply {
-                    text = "$title\n$artist"
-                    isAllCaps = false
-                    setOnClickListener {
-                        startPlaybackService(PlaybackService.ACTION_PLAY, uri, title)
-                        nowPlaying.text = "Playing: $title"
-                    }
-                }
-                songList.addView(button)
-            }
-
-            status.text = if (songs.isEmpty()) {
-                "No music found. Put an MP3 on your phone and scan again."
-            } else {
-                "${songs.size} song(s) found"
+            setOnLongClickListener {
+                val details = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                details.data = android.net.Uri.parse("package:" + info.packageName)
+                startActivity(details)
+                true
             }
         }
+        val icon = ImageView(this).apply {
+            setImageDrawable(info.loadIcon(pm))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        tile.addView(icon, LinearLayout.LayoutParams(dp(quickSize(quick)), dp(quickSize(quick))))
+        val name = label(pm.getApplicationLabel(info).toString(), 11, fg, false).apply {
+            gravity = Gravity.CENTER
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(0, dp(5), 0, 0)
+        }
+        tile.addView(name, LinearLayout.LayoutParams(-1, -2))
+        return tile
     }
 
-    private fun startPlaybackService(action: String, uri: Uri? = null, title: String? = null) {
-        val intent = Intent(this, PlaybackService::class.java).apply {
-            this.action = action
-            if (uri != null) putExtra(PlaybackService.EXTRA_URI, uri.toString())
-            if (title != null) putExtra(PlaybackService.EXTRA_TITLE, title)
+    private fun quickSize(quick: Boolean) = if (quick) 34 else 39
+
+    private fun label(text: String, size: Int, color: Int, bold: Boolean): TextView =
+        TextView(this).apply {
+            this.text = text
+            textSize = size.toFloat()
+            setTextColor(color)
+            if (bold) setTypeface(typeface, Typeface.BOLD)
         }
-        ContextCompat.startForegroundService(this, intent)
+
+    private fun shape(color: Int, radius: Int) = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = dp(radius).toFloat()
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private class SimpleWatcher(val changed: (String) -> Unit) : android.text.TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { changed(s?.toString().orEmpty()) }
+        override fun afterTextChanged(s: android.text.Editable?) {}
     }
 }
