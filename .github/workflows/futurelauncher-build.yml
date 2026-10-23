@@ -5,6 +5,7 @@ on:
     paths:
       - "FutureLauncher/**"
       - "FutureLauncher_v7.zip"
+      - "v7-payload/READY"
   workflow_dispatch:
 
 permissions:
@@ -17,7 +18,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Replace FutureLauncher with uploaded v7 source (when ZIP is present)
+      - name: Assemble v7 archive from payload chunks
+        if: ${{ hashFiles('v7-payload/READY') != '' }}
+        run: |
+          cat v7-payload/*.b64 | base64 --decode > FutureLauncher_v7.zip
+
+      - name: Replace FutureLauncher with uploaded v7 source
         if: ${{ hashFiles('FutureLauncher_v7.zip') != '' }}
         run: |
           rm -rf FutureLauncher
