@@ -118,7 +118,7 @@ class MainActivity : Activity() {
         searchBox.addView(label("⌕", 25, lime, false))
         search = EditText(this).apply {
             hint = "Find an app..."; setHintTextColor(muted); setTextColor(white); textSize = 14f
-            singleLine = true; background = null; setPadding(dp(10), 0, dp(4), 0)
+            isSingleLine = true; background = null; setPadding(dp(10), 0, dp(4), 0)
             imeOptions = EditorInfo.IME_ACTION_SEARCH
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
