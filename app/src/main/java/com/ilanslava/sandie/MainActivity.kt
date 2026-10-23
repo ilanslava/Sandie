@@ -195,13 +195,14 @@ class MainActivity : Activity() {
     }
 
     private fun showPersonalizeMenu() {
-        val options = arrayOf(if (lightMode) "Switch to dark theme" else "Switch to light theme", "Refresh app list", "Manage pinned apps", "Open Android home settings")
+        val options = arrayOf(if (lightMode) "Switch to dark theme" else "Switch to light theme", "Refresh app list", "Manage pinned apps", "Open Android home settings", "Change wallpaper")
         AlertDialog.Builder(this).setTitle("ZERO / PERSONALIZE").setItems(options) { _, which ->
             when (which) {
                 0 -> { lightMode = !lightMode; prefs.edit().putBoolean("light_mode", lightMode).apply(); buildHome() }
                 1 -> { loadApps(); renderApps(); Toast.makeText(this, "App list refreshed", Toast.LENGTH_SHORT).show() }
                 2 -> showPinnedApps()
                 3 -> try { startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS)) } catch (_: Exception) { Toast.makeText(this, "Choose ZERO as your default Home app in system settings", Toast.LENGTH_LONG).show() }
+                4 -> try { startActivity(Intent(Intent.ACTION_SET_WALLPAPER)) } catch (_: Exception) { Toast.makeText(this, "Wallpaper settings are not available on this device", Toast.LENGTH_LONG).show() }
             }
         }.setNegativeButton("Close", null).show()
     }
