@@ -135,7 +135,7 @@ class MainActivity : Activity() {
             setHintTextColor(muted)
             setTextColor(fg)
             textSize = 15f
-            singleLine = true
+            isSingleLine = true
             background = null
             setPadding(dp(10), 0, 0, 0)
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
