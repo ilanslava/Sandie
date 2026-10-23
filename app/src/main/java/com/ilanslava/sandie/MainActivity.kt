@@ -21,6 +21,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import android.app.AlertDialog
+import android.content.SharedPreferences
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -28,6 +31,8 @@ import java.util.Locale
 class MainActivity : Activity() {
     private var lightMode = false
     private var query = ""
+    private lateinit var prefs: SharedPreferences
+    private val favoritePackages = linkedSetOf<String>()
     private lateinit var root: LinearLayout
     private lateinit var appGrid: GridLayout
     private lateinit var resultLabel: TextView
@@ -52,6 +57,9 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        prefs = getSharedPreferences("zero_launcher", MODE_PRIVATE)
+        lightMode = prefs.getBoolean("light_mode", false)
+        favoritePackages.addAll(prefs.getStringSet("favorites", emptySet()) ?: emptySet())
         window.statusBarColor = bg
         window.navigationBarColor = bg
         loadApps()
@@ -66,7 +74,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (::appGrid.isInitialized) renderApps()
+        if (::appGrid.isInitialized) { loadApps(); renderApps() }
     }
 
     private fun loadApps() {
@@ -101,9 +109,17 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             background = shape(panel, 22)
             layoutParams = LinearLayout.LayoutParams(dp(54), dp(54))
-            setOnClickListener { lightMode = !lightMode; buildHome() }
+            setOnClickListener { lightMode = !lightMode; prefs.edit().putBoolean("light_mode", lightMode).apply(); buildHome() }
+            setOnLongClickListener { showPersonalizeMenu(); true }
         }
         top.addView(themeButton)
+        val menuButton = label("⋯", 26, fg, true).apply {
+            gravity = Gravity.CENTER
+            background = shape(panel, 22)
+            layoutParams = LinearLayout.LayoutParams(dp(54), dp(54)).apply { marginStart = dp(8) }
+            setOnClickListener { showPersonalizeMenu() }
+        }
+        top.addView(menuButton)
         root.addView(top)
 
         val searchWrap = LinearLayout(this).apply {
@@ -133,8 +149,8 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(23); bottomMargin = dp(10) }
         }
-        quickHeader.addView(label("QUICK ACCESS", 11, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
-        quickHeader.addView(label("Tap an icon to open", 11, muted, false))
+        quickHeader.addView(label("YOUR DOCK", 11, muted, true), LinearLayout.LayoutParams(0, -2, 1f))
+        quickHeader.addView(label("Hold an app below to pin it", 11, muted, false))
         root.addView(quickHeader)
 
         val quick = GridLayout(this).apply {
@@ -142,7 +158,7 @@ class MainActivity : Activity() {
             rowCount = 1
             alignmentMode = GridLayout.ALIGN_BOUNDS
         }
-        val quickApps = preferredApps().take(4)
+        val quickApps = dockApps().take(4)
         quickApps.forEach { quick.addView(appTile(it, true), GridLayout.LayoutParams().apply {
             width = 0; height = dp(86); columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
             setMargins(dp(3), 0, dp(3), 0)
@@ -171,6 +187,39 @@ class MainActivity : Activity() {
         root.addView(footer)
         setContentView(root)
         renderApps()
+    }
+
+    private fun dockApps(): List<ApplicationInfo> {
+        val pinned = favoritePackages.mapNotNull { pkg -> apps.firstOrNull { it.packageName == pkg } }
+        return if (pinned.isNotEmpty()) pinned else preferredApps().take(4)
+    }
+
+    private fun showPersonalizeMenu() {
+        val options = arrayOf(if (lightMode) "Switch to dark theme" else "Switch to light theme", "Refresh app list", "Manage pinned apps", "Open Android home settings")
+        AlertDialog.Builder(this).setTitle("ZERO / PERSONALIZE").setItems(options) { _, which ->
+            when (which) {
+                0 -> { lightMode = !lightMode; prefs.edit().putBoolean("light_mode", lightMode).apply(); buildHome() }
+                1 -> { loadApps(); renderApps(); Toast.makeText(this, "App list refreshed", Toast.LENGTH_SHORT).show() }
+                2 -> showPinnedApps()
+                3 -> try { startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS)) } catch (_: Exception) { Toast.makeText(this, "Choose ZERO as your default Home app in system settings", Toast.LENGTH_LONG).show() }
+            }
+        }.setNegativeButton("Close", null).show()
+    }
+
+    private fun showPinnedApps() {
+        val names = apps.map { packageManager.getApplicationLabel(it).toString() }.toTypedArray()
+        val selected = apps.map { it.packageName in favoritePackages }.toBooleanArray()
+        AlertDialog.Builder(this).setTitle("Choose your dock apps").setMultiChoiceItems(names, selected) { _, index, checked ->
+            val pkg = apps[index].packageName
+            if (checked) favoritePackages.add(pkg) else favoritePackages.remove(pkg)
+        }.setPositiveButton("Save") { _, _ -> prefs.edit().putStringSet("favorites", HashSet(favoritePackages)).apply(); buildHome() }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun toggleFavorite(info: ApplicationInfo) {
+        if (favoritePackages.contains(info.packageName)) { favoritePackages.remove(info.packageName); Toast.makeText(this, "Removed from dock", Toast.LENGTH_SHORT).show() }
+        else { favoritePackages.add(info.packageName); Toast.makeText(this, "Pinned to dock", Toast.LENGTH_SHORT).show() }
+        prefs.edit().putStringSet("favorites", HashSet(favoritePackages)).apply()
+        buildHome()
     }
 
     private fun preferredApps(): List<ApplicationInfo> {
@@ -219,9 +268,11 @@ class MainActivity : Activity() {
                 }
             }
             setOnLongClickListener {
-                val details = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                details.data = android.net.Uri.parse("package:" + info.packageName)
-                startActivity(details)
+                if (!quick) toggleFavorite(info) else {
+                    val details = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    details.data = android.net.Uri.parse("package:" + info.packageName)
+                    startActivity(details)
+                }
                 true
             }
         }
